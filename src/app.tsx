@@ -4,13 +4,7 @@ import { SettingDrawer } from '@ant-design/pro-components';
 import type { RequestConfig, RunTimeLayoutConfig } from '@umijs/max';
 import { history, Link } from '@umijs/max';
 import React from 'react';
-import {
-  AvatarDropdown,
-  AvatarName,
-  Footer,
-  Question,
-  SelectLang,
-} from '@/components';
+import { AvatarDropdown, AvatarName, Footer, SelectLang } from '@/components';
 import { currentUser as queryCurrentUser } from '@/services/rustdesk-console/auth';
 import defaultSettings from '../config/defaultSettings';
 import { errorConfig } from './requestErrorConfig';
@@ -20,6 +14,7 @@ const isDev = process.env.NODE_ENV === 'development' || process.env.CI;
 const loginPath = '/user/login';
 
 const TOKEN_KEY = 'rustdesk_access_token';
+const THEME_KEY = 'rustdesk_theme_settings';
 
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
@@ -31,6 +26,26 @@ export function setToken(token: string) {
 
 export function removeToken() {
   localStorage.removeItem(TOKEN_KEY);
+}
+
+function getStoredThemeSettings(): Partial<LayoutSettings> | undefined {
+  try {
+    const stored = localStorage.getItem(THEME_KEY);
+    if (stored) {
+      return JSON.parse(stored);
+    }
+  } catch {
+    // ignore
+  }
+  return undefined;
+}
+
+function storeThemeSettings(settings: Partial<LayoutSettings>) {
+  try {
+    localStorage.setItem(THEME_KEY, JSON.stringify(settings));
+  } catch {
+    // ignore
+  }
 }
 
 export async function getInitialState(): Promise<{
@@ -48,18 +63,24 @@ export async function getInitialState(): Promise<{
     }
     return undefined;
   };
+  const storedTheme = getStoredThemeSettings();
+  const initialSettings = {
+    ...(defaultSettings as Partial<LayoutSettings>),
+    ...storedTheme,
+  };
+
   const { location } = history;
   if (![loginPath].includes(location.pathname) && getToken()) {
     const currentUser = await fetchUserInfo();
     return {
       fetchUserInfo,
       currentUser,
-      settings: defaultSettings as Partial<LayoutSettings>,
+      settings: initialSettings,
     };
   }
   return {
     fetchUserInfo,
-    settings: defaultSettings as Partial<LayoutSettings>,
+    settings: initialSettings,
   };
 }
 
@@ -100,19 +121,18 @@ export const layout: RunTimeLayoutConfig = ({
       return (
         <>
           {children}
-          {isDev && (
-            <SettingDrawer
-              disableUrlParams
-              enableDarkTheme
-              settings={initialState?.settings}
-              onSettingChange={(settings) => {
-                setInitialState((preInitialState) => ({
-                  ...preInitialState,
-                  settings,
-                }));
-              }}
-            />
-          )}
+          <SettingDrawer
+            disableUrlParams
+            enableDarkTheme
+            settings={initialState?.settings}
+            onSettingChange={(settings) => {
+              storeThemeSettings(settings);
+              setInitialState((preInitialState) => ({
+                ...preInitialState,
+                settings,
+              }));
+            }}
+          />
         </>
       );
     },
