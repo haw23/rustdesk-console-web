@@ -1,20 +1,21 @@
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { PageContainer, ProTable } from '@ant-design/pro-components';
 import { FormattedMessage, useIntl } from '@umijs/max';
-import { App, Button, DatePicker, Form, Input, Space, Tag } from 'antd';
+import { App, Button, Tag } from 'antd';
 import React, { useRef, useState } from 'react';
 import { getConnectionAudits } from '@/services/rustdesk-console/audit';
 import { DownloadOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 
-const { RangePicker } = DatePicker;
-
 const ConnectionAudit: React.FC = () => {
   const intl = useIntl();
   const { message: msgApi } = App.useApp();
   const actionRef = useRef<ActionType>();
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [searchForm] = Form.useForm();
+  const [searchParams, setSearchParams] = useState<{
+    remote?: string;
+    conn_type?: number;
+    created_at?: string;
+  }>({});
   const [dataSource, setDataSource] = useState<API.ConnectionAuditItem[]>([]);
 
   const handleExportCSV = () => {
@@ -68,6 +69,11 @@ const ConnectionAudit: React.FC = () => {
     );
   };
 
+  const handleSearch = (values: { remote?: string; conn_type?: number; created_at?: string }) => {
+    setSearchParams(values);
+    actionRef.current?.reload();
+  };
+
   const columns: ProColumns<API.ConnectionAuditItem>[] = [
     {
       title: "",
@@ -81,6 +87,7 @@ const ConnectionAudit: React.FC = () => {
       ),
       dataIndex: "action",
       width: 100,
+      search: false,
       render: (_: unknown, record: API.ConnectionAuditItem) => {
         const action = record.action || '';
         if (action === 'connect' || action === 'CONNECT') {
@@ -99,6 +106,7 @@ const ConnectionAudit: React.FC = () => {
       dataIndex: "to",
       width: 150,
       ellipsis: true,
+      search: false,
       render: (_: unknown, record: API.ConnectionAuditItem) => (
         <span>
           {record.to}
@@ -113,6 +121,7 @@ const ConnectionAudit: React.FC = () => {
       dataIndex: "from",
       width: 150,
       ellipsis: true,
+      search: false,
       render: (_: unknown, record: API.ConnectionAuditItem) => (
         <span>
           {record.from}
@@ -126,6 +135,7 @@ const ConnectionAudit: React.FC = () => {
       ),
       dataIndex: "start_time",
       width: 180,
+      search: false,
       valueType: "dateTime",
       render: (_: unknown, record: API.ConnectionAuditItem) => record.start_time || '-',
     },
@@ -135,6 +145,7 @@ const ConnectionAudit: React.FC = () => {
       ),
       dataIndex: "end_time",
       width: 180,
+      search: false,
       valueType: "dateTime",
       render: (_: unknown, record: API.ConnectionAuditItem) => record.end_time || '-',
     },
@@ -144,6 +155,7 @@ const ConnectionAudit: React.FC = () => {
       ),
       dataIndex: "duration",
       width: 100,
+      search: false,
       render: (_: unknown, record: API.ConnectionAuditItem) => record.duration || '-',
     },
     {
@@ -153,22 +165,8 @@ const ConnectionAudit: React.FC = () => {
       dataIndex: "note",
       width: 150,
       ellipsis: true,
+      search: false,
       render: (_: unknown, record: API.ConnectionAuditItem) => record.note || '-',
-    },
-    {
-      title: (
-        <FormattedMessage id="pages.common.action" defaultMessage="Action" />
-      ),
-      valueType: "option",
-      width: 80,
-      fixed: "right",
-      render: () => (
-        <Space size="small">
-          <Button type="link" size="small">
-            <FormattedMessage id="pages.common.detail" defaultMessage="Detail" />
-          </Button>
-        </Space>
-      ),
     },
   ];
 
@@ -180,10 +178,13 @@ const ConnectionAudit: React.FC = () => {
         }
         actionRef={actionRef}
         rowKey="id"
-        request={async (params: { current?: number; pageSize?: number }) => {
+        request={async (params) => {
           const result = await getConnectionAudits({
             current: params.current || 1,
             pageSize: params.pageSize || 20,
+            remote: searchParams.remote,
+            conn_type: searchParams.conn_type,
+            created_at: searchParams.created_at,
           });
           setDataSource(result.data || []);
           return {
@@ -193,34 +194,19 @@ const ConnectionAudit: React.FC = () => {
           };
         }}
         columns={columns}
-        rowSelection={{
-          selectedRowKeys,
-          onChange: setSelectedRowKeys,
+        search={{
+          labelWidth: 'auto',
+          defaultCollapsed: false,
+          optionRender: (searchConfig, formProps, dom) => [
+            ...dom.reverse(),
+          ],
         }}
-        search={
-          <Form form={searchForm} layout="inline">
-            <Form.Item name="action">
-              <Input placeholder={intl.formatMessage({ id: 'pages.audits.type', defaultMessage: 'Type' })} style={{ width: 120 }} />
-            </Form.Item>
-            <Form.Item name="from">
-              <Input placeholder={intl.formatMessage({ id: 'pages.audits.masterDevice', defaultMessage: 'Master Device' })} style={{ width: 150 }} />
-            </Form.Item>
-            <Form.Item name="to">
-              <Input placeholder={intl.formatMessage({ id: 'pages.audits.controlledDevice', defaultMessage: 'Controlled Device' })} style={{ width: 150 }} />
-            </Form.Item>
-            <Form.Item name="time">
-              <RangePicker showTime style={{ width: 350 }} />
-            </Form.Item>
-            <Space>
-              <Button onClick={() => searchForm.resetFields()}>
-                <FormattedMessage id="pages.common.reset" defaultMessage="Reset" />
-              </Button>
-              <Button type="primary" onClick={() => actionRef.current?.reload()}>
-                <FormattedMessage id="pages.common.search" defaultMessage="Search" />
-              </Button>
-            </Space>
-          </Form>
-        }
+        form={{
+          onSubmit: handleSearch,
+          onReset: () => {
+            setSearchParams({});
+          },
+        }}
         pagination={{
           defaultPageSize: 20,
           showSizeChanger: true,

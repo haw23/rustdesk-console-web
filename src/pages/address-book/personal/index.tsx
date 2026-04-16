@@ -21,7 +21,9 @@ const PersonalAddressBook: React.FC = () => {
   const [addTagModalVisible, setAddTagModalVisible] = useState(false);
   const [addPeerForm] = Form.useForm();
   const [addTagForm] = Form.useForm();
-  const [searchForm] = Form.useForm();
+  const [searchParams, setSearchParams] = useState<{
+    search?: string;
+  }>({});
 
   const { data: abData, loading: abLoading } = useRequest(getPersonalAddressBook);
   const { data: tags = [] } = useRequest(
@@ -86,6 +88,11 @@ const PersonalAddressBook: React.FC = () => {
     }
   };
 
+  const handleSearch = (values: { search?: string }) => {
+    setSearchParams(values);
+    actionRef.current?.reload();
+  };
+
   const columns: ProColumns<API.PeerItem>[] = [
     {
       title: "",
@@ -107,6 +114,7 @@ const PersonalAddressBook: React.FC = () => {
       dataIndex: "hostname",
       width: 150,
       ellipsis: true,
+      search: false,
       render: (_: unknown, record: API.PeerItem) => record.hostname || "-",
     },
     {
@@ -116,6 +124,7 @@ const PersonalAddressBook: React.FC = () => {
       dataIndex: "alias",
       width: 150,
       ellipsis: true,
+      search: false,
       render: (_: unknown, record: API.PeerItem) => (record as API.PeerItem & { alias?: string }).alias || "-",
     },
     {
@@ -124,6 +133,7 @@ const PersonalAddressBook: React.FC = () => {
       ),
       dataIndex: "tags",
       width: 200,
+      search: false,
       render: (_: unknown, record: API.PeerItem) => {
         const peerTags = record.tags || [];
         if (peerTags.length === 0) return "-";
@@ -188,7 +198,7 @@ const PersonalAddressBook: React.FC = () => {
         actionRef={actionRef}
         rowKey="id"
         loading={abLoading}
-        request={async (params: { current?: number; pageSize?: number }) => {
+        request={async (params) => {
           if (!abData) {
             return { data: [], total: 0, success: true };
           }
@@ -197,6 +207,7 @@ const PersonalAddressBook: React.FC = () => {
             pageSize: params.pageSize || 20,
             ab: abData,
             hide_password: true,
+            search: searchParams.search,
           });
           return {
             data: result.data || [],
@@ -209,27 +220,19 @@ const PersonalAddressBook: React.FC = () => {
           selectedRowKeys,
           onChange: setSelectedRowKeys,
         }}
-        search={
-          <Form form={searchForm} layout="inline">
-            <Form.Item name="id">
-              <Input placeholder="ID" style={{ width: 150 }} />
-            </Form.Item>
-            <Form.Item name="hostname">
-              <Input placeholder={intl.formatMessage({ id: 'pages.addressBook.device', defaultMessage: 'Device' })} style={{ width: 150 }} />
-            </Form.Item>
-            <Form.Item name="alias">
-              <Input placeholder={intl.formatMessage({ id: 'pages.addressBook.alias', defaultMessage: 'Alias' })} style={{ width: 150 }} />
-            </Form.Item>
-            <Space>
-              <Button onClick={() => searchForm.resetFields()}>
-                <FormattedMessage id="pages.common.reset" defaultMessage="Reset" />
-              </Button>
-              <Button type="primary" onClick={() => actionRef.current?.reload()}>
-                <FormattedMessage id="pages.common.search" defaultMessage="Search" />
-              </Button>
-            </Space>
-          </Form>
-        }
+        search={{
+          labelWidth: 'auto',
+          defaultCollapsed: false,
+          optionRender: (searchConfig, formProps, dom) => [
+            ...dom.reverse(),
+          ],
+        }}
+        form={{
+          onSubmit: handleSearch,
+          onReset: () => {
+            setSearchParams({});
+          },
+        }}
         pagination={{
           defaultPageSize: 20,
           showSizeChanger: true,
@@ -275,19 +278,13 @@ const PersonalAddressBook: React.FC = () => {
         onCancel={() => setAddTagModalVisible(false)}
         onOk={() => addTagForm.submit()}
       >
-        <Form form={addTagForm} onFinish={handleAddTag}>
+        <Form form={addTagForm} onFinish={handleAddTag} layout="vertical">
           <Form.Item
             name="name"
             label={<FormattedMessage id="pages.addressBook.tagName" defaultMessage="Tag Name" />}
             rules={[{ required: true, message: 'Please enter tag name' }]}
           >
             <Input />
-          </Form.Item>
-          <Form.Item
-            name="color"
-            label={<FormattedMessage id="pages.addressBook.tagColor" defaultMessage="Color" />}
-          >
-            <Input placeholder="#1890ff" />
           </Form.Item>
         </Form>
       </Modal>
