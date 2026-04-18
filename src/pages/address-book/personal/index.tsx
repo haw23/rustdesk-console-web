@@ -1,9 +1,9 @@
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { PageContainer, ProTable } from '@ant-design/pro-components';
 import { FormattedMessage, useIntl, useRequest } from '@umijs/max';
-import { App, Button, Form, Input, Modal, Popconfirm, Space, Tag } from 'antd';
+import { Alert, App, Button, Form, Input, Modal, Popconfirm, Select, Space, Spin, Tag } from 'antd';
 import { DeleteOutlined, ImportOutlined, PlusOutlined } from '@ant-design/icons';
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   getPersonalAddressBook,
   getPeers,
@@ -12,11 +12,12 @@ import {
   getTags,
   addTag,
 } from '@/services/rustdesk-console/addressBook';
+import { getDeviceList } from '@/services/rustdesk-console/device';
 
 const PersonalAddressBook: React.FC = () => {
   const intl = useIntl();
   const { message: msgApi } = App.useApp();
-  const actionRef = useRef<ActionType>();
+  const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [addPeerModalVisible, setAddPeerModalVisible] = useState(false);
   const [addTagModalVisible, setAddTagModalVisible] = useState(false);
@@ -25,37 +26,87 @@ const PersonalAddressBook: React.FC = () => {
   const [searchParams, setSearchParams] = useState<{
     search?: string;
   }>({});
+  const [availablePeers, setAvailablePeers] = useState<API.DeviceItem[]>([]);
+  const [peersLoading, setPeersLoading] = useState(false);
+  const [addPeerError, setAddPeerError] = useState('');
+  const [selectedPeerId, setSelectedPeerId] = useState<string>();
 
-  const { data: abData, loading: abLoading } = useRequest(getPersonalAddressBook);
+  const [abGuid, setAbGuid] = useState<string>();
+  const [abLoading, setAbLoading] = useState(true);
+  
+  useEffect(() => {
+    const fetchAbGuid = async () => {
+      setAbLoading(true);
+      try {
+        const result = await getPersonalAddressBook();
+        setAbGuid(result.guid);
+      } catch (error) {
+        console.error('Failed to fetch personal address book:', error);
+      } finally {
+        setAbLoading(false);
+      }
+    };
+    fetchAbGuid();
+  }, []);
+  
   const { data: tags = [] } = useRequest(
-    () => (abData ? getTags(abData) : Promise.resolve([])),
-    { ready: !!abData }
+    () => (abGuid ? getTags(abGuid) : Promise.resolve([])),
+    { ready: !!abGuid }
   );
 
-  const handleAddPeer = async (values: API.AddPeerParams) => {
-    if (!abData) return;
+  const fetchAvailablePeers = useCallback(async () => {
+    if (!abGuid) return;
+    setPeersLoading(true);
     try {
-      await addPeer(abData, values);
+      const res = await getPeers({
+        current: 1,
+        pageSize: 1000,
+        ab: abGuid,
+      });
+      const existingIds = new Set((res.data || []).map((p: API.PeerItem) => p.id));
+      const allDevices = await getDeviceList({ current: 1, pageSize: 1000 });
+      const notInAb = (allDevices.data || []).filter((d: API.DeviceItem) => !existingIds.has(d.id));
+      setAvailablePeers(notInAb);
+    } catch {
+      setAvailablePeers([]);
+    } finally {
+      setPeersLoading(false);
+    }
+  }, [abGuid]);
+
+  useEffect(() => {
+    if (addPeerModalVisible && abGuid) {
+      setAddPeerError('');
+      setSelectedPeerId(undefined);
+      addPeerForm.resetFields();
+      fetchAvailablePeers();
+    }
+  }, [addPeerModalVisible, abGuid, addPeerForm, fetchAvailablePeers]);
+
+  const handleAddPeer = async (values: API.AddPeerParams) => {
+    if (!abGuid) return;
+    setAddPeerError('');
+    try {
+      await addPeer(abGuid, values);
       msgApi.success(
         intl.formatMessage({ id: 'pages.addressBook.peerAdded', defaultMessage: 'Peer added' }),
       );
       setAddPeerModalVisible(false);
       addPeerForm.resetFields();
       actionRef.current?.reload();
-    } catch {
-      msgApi.error(
-        intl.formatMessage({
-          id: 'pages.addressBook.peerAddFailed',
-          defaultMessage: 'Failed to add peer',
-        }),
-      );
+    } catch (error: any) {
+      const errMsg = error?.response?.data?.error || error?.message || '';
+      setAddPeerError(errMsg || intl.formatMessage({
+        id: 'pages.addressBook.peerAddFailed',
+        defaultMessage: 'Failed to add peer',
+      }));
     }
   };
 
   const handleAddTag = async (values: API.AddTagParams) => {
-    if (!abData) return;
+    if (!abGuid) return;
     try {
-      await addTag(abData, values);
+      await addTag(abGuid, values);
       msgApi.success(
         intl.formatMessage({ id: 'pages.addressBook.tagAdded', defaultMessage: 'Tag added' }),
       );
@@ -72,9 +123,9 @@ const PersonalAddressBook: React.FC = () => {
   };
 
   const handleDeletePeer = async (id: string) => {
-    if (!abData) return;
+    if (!abGuid) return;
     try {
-      await deletePeer(abData, { id });
+      await deletePeer(abGuid, { id });
       msgApi.success(
         intl.formatMessage({ id: 'pages.addressBook.peerDeleted', defaultMessage: 'Peer deleted' }),
       );
@@ -89,9 +140,12 @@ const PersonalAddressBook: React.FC = () => {
     }
   };
 
-  const handleSearch = (values: { search?: string }) => {
-    setSearchParams(values);
-    actionRef.current?.reload();
+  const handlePeerSelect = (peerId: string) => {
+    setSelectedPeerId(peerId);
+    const peer = availablePeers.find((p: API.DeviceItem) => p.id === peerId);
+    if (peer) {
+      addPeerForm.setFieldsValue({ id: peer.id, hostname: peer.hostname || '' });
+    }
   };
 
   const columns: ProColumns<API.PeerItem>[] = [
@@ -200,14 +254,13 @@ const PersonalAddressBook: React.FC = () => {
         rowKey="id"
         loading={abLoading}
         request={async (params) => {
-          if (!abData) {
+          if (!abGuid) {
             return { data: [], total: 0, success: true };
           }
           const result = await getPeers({
             current: params.current || 1,
             pageSize: params.pageSize || 20,
-            ab: abData,
-            hide_password: true,
+            ab: abGuid,
             search: searchParams.search,
           });
           return {
@@ -228,12 +281,7 @@ const PersonalAddressBook: React.FC = () => {
             ...dom.reverse(),
           ],
         }}
-        form={{
-          onSubmit: handleSearch,
-          onReset: () => {
-            setSearchParams({});
-          },
-        }}
+        params={{ search: searchParams.search }}
         pagination={{
           defaultPageSize: 20,
           showSizeChanger: true,
@@ -270,16 +318,48 @@ const PersonalAddressBook: React.FC = () => {
         onCancel={() => setAddPeerModalVisible(false)}
         onOk={() => addPeerForm.submit()}
       >
+        {addPeerError && (
+          <Alert
+            message={addPeerError}
+            type="error"
+            showIcon
+            style={{ marginBottom: 16 }}
+          />
+        )}
         <Form form={addPeerForm} onFinish={handleAddPeer} layout="vertical">
+          <Form.Item
+            name="peerSelect"
+            label={<FormattedMessage id="pages.addressBook.selectDevice" defaultMessage="Select Device" />}
+          >
+            <Select
+              placeholder={intl.formatMessage({
+                id: 'pages.addressBook.selectDevicePlaceholder',
+                defaultMessage: 'Select a device from the system',
+              })}
+              loading={peersLoading}
+              onChange={handlePeerSelect}
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              options={availablePeers.map((p: API.DeviceItem) => ({
+                label: `${p.hostname || p.id} (${p.id})`,
+                value: p.id,
+              }))}
+              notFoundContent={peersLoading ? <Spin size="small" /> : intl.formatMessage({
+                id: 'pages.addressBook.noAvailableDevices',
+                defaultMessage: 'No available devices. Devices must connect to the server first.',
+              })}
+            />
+          </Form.Item>
           <Form.Item
             name="id"
             label="ID"
             rules={[{ required: true, message: 'Please enter peer ID' }]}
           >
-            <Input />
+            <Input disabled={!!selectedPeerId} />
           </Form.Item>
           <Form.Item name="hostname" label={<FormattedMessage id="pages.addressBook.device" defaultMessage="Device" />}>
-            <Input />
+            <Input disabled={!!selectedPeerId} />
           </Form.Item>
           <Form.Item name="note" label={<FormattedMessage id="pages.addressBook.note" defaultMessage="Note" />}>
             <Input.TextArea />
