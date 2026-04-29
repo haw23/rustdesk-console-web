@@ -1,8 +1,69 @@
 import type { ProColumns } from '@ant-design/pro-components';
 import { FormattedMessage, useIntl } from '@umijs/max';
 import { Badge, Tooltip } from 'antd';
-import { CheckCircleOutlined, CloseCircleOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { 
+  CheckCircleOutlined, 
+  CloseCircleOutlined, 
+  InfoCircleOutlined,
+  WindowsFilled,
+  AndroidFilled,
+  AppleFilled,
+  QqCircleFilled,
+} from '@ant-design/icons';
 import React from 'react';
+
+/**
+ * Get offline duration text
+ */
+const getOfflineDuration = (lastOnlineTime: string, intl: any): string => {
+  try {
+    const lastOnline = new Date(lastOnlineTime + (lastOnlineTime.endsWith('Z') ? '' : 'Z'));
+    const now = new Date();
+    const diffMs = now.getTime() - lastOnline.getTime();
+
+    if (diffMs > 0) {
+      const diffMinutes = Math.floor(diffMs / (1000 * 60));
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+      if (diffDays > 0) {
+        return ` (${diffDays} ${intl.formatMessage({ id: 'pages.devices.days', defaultMessage: 'days' })})`;
+      } else if (diffHours > 0) {
+        return ` (${diffHours} ${intl.formatMessage({ id: 'pages.devices.hours', defaultMessage: 'hours' })})`;
+      } else if (diffMinutes > 0) {
+        return ` (${diffMinutes} ${intl.formatMessage({ id: 'pages.devices.minutes', defaultMessage: 'minutes' })})`;
+      } else {
+        return ` (${intl.formatMessage({ id: 'pages.devices.justNow', defaultMessage: 'just now' })})`;
+      }
+    } else {
+      return '';
+    }
+  } catch (error) {
+    return '';
+  }
+};
+
+/**
+ * Get OS icon component
+ */
+const getOSIcon = (os: string): React.ReactNode => {
+  const osLower = (os || '').toLowerCase();
+  
+  if (osLower.includes('windows')) {
+    return <WindowsFilled />;
+  }
+  if (osLower.includes('android')) {
+    return <AndroidFilled />;
+  }
+  if (osLower.includes('macos') || osLower.includes('ios') || osLower.includes('mac')) {
+    return <AppleFilled />;
+  }
+  if (osLower.includes('linux')) {
+    return <QqCircleFilled />;
+  }
+  
+  return null;
+};
 
 /**
  * Get device table columns definition
@@ -21,13 +82,50 @@ export const getDeviceColumns = (options?: { hideAction?: boolean }): ProColumns
       width: '15%',
       ellipsis: true,
       sorter: true,
-      render: (_: unknown, record: API.DeviceItem) => (
-        <span>
-          <Badge status={record.is_online ? 'success' : 'error'} />
-          &nbsp;&nbsp;
-          <a>{record.id}</a>
-        </span>
-      ),
+      render: (_: unknown, record: API.DeviceItem) => {
+        const osParts = (record.info?.os || '').split(' / ');
+        const osIcon = getOSIcon(record.info?.os || '');
+        
+        // Build online status tooltip
+        let onlineTooltip: string;
+        if (record.is_online) {
+          onlineTooltip = intl.formatMessage({ id: 'pages.devices.online', defaultMessage: 'Online' });
+        } else {
+          const offlineDuration = record.last_online ? getOfflineDuration(record.last_online, intl) : '';
+          onlineTooltip = `${intl.formatMessage({ id: 'pages.devices.offline', defaultMessage: 'Offline' })}${offlineDuration}`;
+        }
+        
+        // Build OS tooltip - show full OS info in one line
+        const osTooltip = osParts[1] || osParts[0] || '';
+        
+        return (
+          <span>
+            <Tooltip title={onlineTooltip}>
+              <span>
+                <Badge status={record.is_online ? 'success' : 'error'} />
+              </span>
+            </Tooltip>
+            &nbsp;&nbsp;
+            {osIcon && osTooltip && (
+              <Tooltip 
+                title={osTooltip}
+                styles={{
+                  root: {
+                    maxWidth: 'none',
+                  },
+                }}
+                overlayStyle={{
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <span>{osIcon}</span>
+              </Tooltip>
+            )}
+            {osIcon && <>&nbsp;&nbsp;</>}
+            <a>{record.id}</a>
+          </span>
+        );
+      },
     },
     {
       title: (
@@ -39,7 +137,6 @@ export const getDeviceColumns = (options?: { hideAction?: boolean }): ProColumns
         </span>
       ),
       dataIndex: 'device_name',
-      width: 150,
       ellipsis: true,
       search: false,
       sorter: true,
@@ -53,7 +150,6 @@ export const getDeviceColumns = (options?: { hideAction?: boolean }): ProColumns
     {
       title: <FormattedMessage id="pages.devices.deviceGroup" defaultMessage="Group" />,
       dataIndex: 'device_group_name',
-      width: 120,
       ellipsis: true,
       hideInSearch: true,
       sorter: true,
@@ -62,7 +158,6 @@ export const getDeviceColumns = (options?: { hideAction?: boolean }): ProColumns
     {
       title: <FormattedMessage id="pages.devices.user" defaultMessage="User" />,
       dataIndex: 'user_name',
-      width: 120,
       ellipsis: true,
       sorter: true,
       render: (_: unknown, record: API.DeviceItem) => record.user_name || '-',
@@ -103,7 +198,6 @@ export const getDeviceColumns = (options?: { hideAction?: boolean }): ProColumns
     {
       title: <FormattedMessage id="pages.devices.status" defaultMessage="Status" />,
       dataIndex: 'status_display',
-      width: 80,
       search: false,
       sorter: true,
       render: (_: unknown, record: API.DeviceItem) => {
@@ -123,7 +217,6 @@ export const getDeviceColumns = (options?: { hideAction?: boolean }): ProColumns
         </span>
       ),
       dataIndex: 'strategy_name',
-      width: 100,
       ellipsis: true,
       search: false,
       render: (_: unknown, record: API.DeviceItem) => record.strategy_name || '-',
@@ -131,7 +224,6 @@ export const getDeviceColumns = (options?: { hideAction?: boolean }): ProColumns
     {
       title: <FormattedMessage id="pages.devices.info" defaultMessage="Info" />,
       dataIndex: 'info',
-      width: 200,
       ellipsis: true,
       search: false,
       render: (_: unknown, record: API.DeviceItem) => {
@@ -142,7 +234,6 @@ export const getDeviceColumns = (options?: { hideAction?: boolean }): ProColumns
     {
       title: <FormattedMessage id="pages.devices.note" defaultMessage="Note" />,
       dataIndex: 'note',
-      width: 150,
       ellipsis: true,
       search: false,
       sorter: true,
