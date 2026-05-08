@@ -1,8 +1,8 @@
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { PageContainer, ProTable } from '@ant-design/pro-components';
 import { FormattedMessage, useIntl } from '@umijs/max';
-import { Alert, App, Button, ColorPicker, Form, Input, Modal, Popconfirm, Radio, Select, Space, Tag, Table, Typography } from 'antd';
-import { DeleteOutlined, EditOutlined, InfoCircleOutlined, PlusOutlined, SelectOutlined } from '@ant-design/icons';
+import { Alert, App, Button, ColorPicker, Form, Input, Modal, Popconfirm, Radio, Select, Space, Tag, Table, Tooltip, Typography } from 'antd';
+import { DeleteOutlined, EditOutlined, InfoCircleOutlined, PlusOutlined, SelectOutlined, WindowsFilled, AndroidFilled, AppleFilled, QqCircleFilled } from '@ant-design/icons';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   getPersonalAddressBook,
@@ -23,6 +23,25 @@ const { Text } = Typography;
 const argbToHex = (color: number | undefined): string => {
   if (!color) return '#1677ff';
   return `#${color.toString(16).padStart(8, '0').slice(-6)}`;
+};
+
+const getOSIcon = (os: string): React.ReactNode => {
+  const osLower = (os || '').toLowerCase();
+
+  if (osLower.includes('windows')) {
+    return <WindowsFilled />;
+  }
+  if (osLower.includes('android')) {
+    return <AndroidFilled />;
+  }
+  if (osLower.includes('macos') || osLower.includes('ios') || osLower.includes('mac')) {
+    return <AppleFilled />;
+  }
+  if (osLower.includes('linux')) {
+    return <QqCircleFilled />;
+  }
+
+  return null;
 };
 
 const PersonalAddressBook: React.FC = () => {
@@ -305,23 +324,58 @@ const PersonalAddressBook: React.FC = () => {
     {
       title: <FormattedMessage id="pages.common.id" defaultMessage="ID" />,
       dataIndex: "id",
-      width: 150,
+      width: '15%',
       ellipsis: true,
       sorter: true,
+      render: (_: unknown, record: API.PeerItem) => {
+        const peerRecord = record as API.PeerItem & { platform?: string };
+        const platformParts = (peerRecord.platform || '').split(' / ');
+        const osIcon = getOSIcon(peerRecord.platform || '');
+        const osTooltip = platformParts[1] || platformParts[0] || '';
+
+        return (
+          <span>
+            {osIcon && osTooltip && (
+              <Tooltip
+                title={osTooltip}
+                styles={{
+                  root: {
+                    maxWidth: 'none',
+                  },
+                }}
+                overlayStyle={{
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <span>{osIcon}</span>
+              </Tooltip>
+            )}
+            {osIcon && <>&nbsp;&nbsp;</>}
+            {record.id}
+          </span>
+        );
+      },
     },
     {
       title: (
-        <Space size={4}>
+        <span>
           <FormattedMessage id="pages.addressBook.device" defaultMessage="Device" />
-          <InfoCircleOutlined style={{ color: '#999', fontSize: 12 }} />
-        </Space>
+          <Tooltip title={intl.formatMessage({ id: "pages.addressBook.deviceInfo", defaultMessage: "username@device_name" })}>
+            <InfoCircleOutlined style={{ marginLeft: 4 }} />
+          </Tooltip>
+        </span>
       ),
       dataIndex: "hostname",
       width: 150,
       ellipsis: true,
       search: false,
       sorter: true,
-      render: (_: unknown, record: API.PeerItem) => record.hostname || "-",
+      render: (_: unknown, record: API.PeerItem) => {
+        const username = (record as API.PeerItem & { username?: string }).username;
+        const hostname = record.hostname;
+        if (username && hostname) return `${username}@${hostname}`;
+        return hostname || username || "-";
+      },
     },
     {
       title: (
