@@ -10,14 +10,23 @@ import {
   enableDevice,
   getDeviceList,
 } from '@/services/rustdesk-console/device';
+import { removeDeviceFromGroup } from '@/services/rustdesk-console/deviceGroup';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { PageContainer, ProTable } from '@ant-design/pro-components';
 import { FormattedMessage, useIntl } from '@umijs/max';
 import { App, Button, Popconfirm, Space } from 'antd';
 import React, { useRef, useState } from 'react';
+import { Helmet } from 'react-helmet-async';
+import Settings from '../../../../config/defaultSettings';
 import { getDeviceColumns } from '@/components/DeviceSelectTable/columns';
 
-const DeviceList: React.FC = () => {
+export interface DeviceListProps {
+  deviceGroupGuid?: string;
+  title?: string;
+  onBack?: () => void;
+}
+
+const DeviceList: React.FC<DeviceListProps> = ({ deviceGroupGuid, title, onBack }) => {
   const intl = useIntl();
   const { message: msgApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
@@ -84,8 +93,35 @@ const DeviceList: React.FC = () => {
     }
   };
 
+  const handleRemoveFromGroup = async (deviceId: string) => {
+    if (!deviceGroupGuid) return;
+    try {
+      await removeDeviceFromGroup(deviceGroupGuid, { deviceIds: [deviceId] });
+      msgApi.success(
+        intl.formatMessage({
+          id: 'pages.devices.removeFromGroupSuccess',
+          defaultMessage: 'Device removed from group',
+        }),
+      );
+      actionRef.current?.reload();
+    } catch {
+      msgApi.error(
+        intl.formatMessage({
+          id: 'pages.devices.removeFromGroupFailed',
+          defaultMessage: 'Failed to remove device from group',
+        }),
+      );
+    }
+  };
+
   // Use shared columns definition and add action column
   const baseColumns = getDeviceColumns();
+  
+  // Filter out device group column if deviceGroupGuid is provided
+  const filteredColumns = deviceGroupGuid 
+    ? baseColumns.filter(col => col.dataIndex !== 'device_group_name' && col.dataIndex !== 'device_group_name_search')
+    : baseColumns;
+  
   const actionColumn: ProColumns<API.DeviceItem> = {
     title: <FormattedMessage id="pages.common.action" defaultMessage="Action" />,
     valueType: 'option',
@@ -93,6 +129,28 @@ const DeviceList: React.FC = () => {
     fixed: 'right',
     render: (_: unknown, record: API.DeviceItem) => {
       const isDisabled = record.status === 0;
+      
+      // When in device group context, only show remove button
+      if (deviceGroupGuid) {
+        return (
+          <Popconfirm
+            key="remove"
+            title={
+              <FormattedMessage
+                id="pages.devices.removeFromGroupConfirm"
+                defaultMessage="Are you sure to remove this device from the group?"
+              />
+            }
+            onConfirm={() => handleRemoveFromGroup(record.id)}
+          >
+            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+              <FormattedMessage id="pages.devices.remove" defaultMessage="Remove" />
+            </Button>
+          </Popconfirm>
+        );
+      }
+      
+      // Normal device list (not in device group context)
       return (
         <Space size="small" split={<span style={{ color: '#ccc' }}>|</span>}>
           <Button key="edit" type="link" size="small" icon={<EditOutlined />}>
@@ -139,10 +197,22 @@ const DeviceList: React.FC = () => {
       );
     },
   };
-  const columns = [...baseColumns, actionColumn];
+  const columns = [...filteredColumns, actionColumn];
 
   return (
-    <PageContainer>
+    <>
+      {title && (
+        <Helmet>
+          <title>
+            {title}
+            {Settings.title && ` - ${Settings.title}`}
+          </title>
+        </Helmet>
+      )}
+      <PageContainer
+        title={title || <FormattedMessage id="pages.devices.list" defaultMessage="Device List" />}
+        onBack={onBack}
+      >
       <ProTable<API.DeviceItem>
         headerTitle={
           <span>
@@ -164,6 +234,7 @@ const DeviceList: React.FC = () => {
             is_online: params.is_online,
             user_name: params.user_name,
             device_group_name: params.device_group_name_search,
+            device_group_guid: deviceGroupGuid,
             os: params.os,
           });
           setTotalDevices(result.total || 0);
@@ -200,6 +271,7 @@ const DeviceList: React.FC = () => {
         }}
       />
     </PageContainer>
+    </>
   );
 };
 
