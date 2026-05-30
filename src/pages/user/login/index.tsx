@@ -5,6 +5,8 @@ import {
   SafetyCertificateOutlined,
   ArrowLeftOutlined,
   GithubOutlined,
+  GoogleOutlined,
+  GitlabOutlined,
 } from '@ant-design/icons';
 import { LoginForm, ProFormText } from '@ant-design/pro-components';
 import {
@@ -34,9 +36,14 @@ import React, {
   useState,
 } from 'react';
 import { flushSync } from 'react-dom';
+import Bowser from 'bowser';
 import { setToken } from '@/utils/auth';
 import { Footer } from '@/components';
-import { login, getLoginOptions } from '@/services/rustdesk-console/auth';
+import {
+  login,
+  getLoginOptions,
+  oidcAuth,
+} from '@/services/rustdesk-console/auth';
 import Settings from '../../../../config/defaultSettings';
 
 // --- Auth step types ---
@@ -51,26 +58,19 @@ type VerifySession = {
 
 // --- Device info ---
 function getDeviceInfo(): API.DeviceInfo {
-  const ua = navigator.userAgent;
-  let os = 'Unknown';
-  if (ua.includes('Win')) os = 'Windows';
-  else if (ua.includes('Mac')) os = 'macOS';
-  else if (ua.includes('Linux')) os = 'Linux';
-  else if (ua.includes('Android')) os = 'Android';
-  else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS';
-
-  let browserName = 'Unknown';
-  if (ua.includes('Firefox')) browserName = 'Firefox';
-  else if (ua.includes('Edg')) browserName = 'Edge';
-  else if (ua.includes('Chrome')) browserName = 'Chrome';
-  else if (ua.includes('Safari')) browserName = 'Safari';
-
-  return { os, type: 'browser', name: browserName };
+  const browser = Bowser.getParser(window.navigator.userAgent);
+  return {
+    os: browser.getOSName(true),
+    type: 'browser',
+    name: `${browser.getBrowserName()} - ${browser.getBrowserVersion()}`,
+  };
 }
 
 // --- OIDC icon mapping ---
 const OIDC_ICONS: Record<string, React.ReactNode> = {
   github: <GithubOutlined style={{ fontSize: 20 }} />,
+  gitlab: <GitlabOutlined style={{ fontSize: 20 }} />,
+  google: <GoogleOutlined style={{ fontSize: 20 }} />,
 };
 
 const OIDC_LABELS: Record<string, string> = {
@@ -180,8 +180,53 @@ const OidcLogin: React.FC<{
   const { styles } = useStyles();
   const intl = useIntl();
   const { message } = App.useApp();
+  const [oidcLoading, setOidcLoading] = useState<string>('');
 
   if (options.length === 0) return null;
+
+  const handleOidcLogin = async (provider: string) => {
+    if (loading || oidcLoading) return;
+
+    setOidcLoading(provider);
+    try {
+      const deviceInfo = getDeviceInfo();
+      const callbackUrl = `${window.location.origin}/#/dashboard`;
+
+      const response = await oidcAuth({
+        op: provider,
+        deviceInfo,
+        callbackUrl,
+      });
+
+      if (response.url) {
+        window.location.href = response.url;
+      } else {
+        message.error(
+          intl.formatMessage({
+            id: 'pages.login.oidc.authFailed',
+            defaultMessage: 'Failed to get authorization URL',
+          }),
+        );
+      }
+    } catch (error: unknown) {
+      const err = error as {
+        response?: {
+          status?: number;
+          data?: { error?: string; message?: string };
+        };
+      };
+      const errorMsg =
+        err?.response?.data?.error ||
+        err?.response?.data?.message ||
+        intl.formatMessage({
+          id: 'pages.login.oidc.authFailed',
+          defaultMessage: 'Failed to initiate OIDC login',
+        });
+      message.error(errorMsg);
+    } finally {
+      setOidcLoading('');
+    }
+  };
 
   return (
     <div className={styles.oidcSection}>
@@ -198,15 +243,9 @@ const OidcLogin: React.FC<{
           <Button
             key={item.name}
             className={styles.oidcButton}
-            disabled={loading}
-            onClick={() => {
-              message.info(
-                intl.formatMessage({
-                  id: 'pages.login.oidc.comingSoon',
-                  defaultMessage: 'Third-party login is coming soon',
-                }),
-              );
-            }}
+            disabled={loading || oidcLoading !== ''}
+            loading={oidcLoading === item.name}
+            onClick={() => handleOidcLogin(item.name)}
           >
             {icon}
             {intl.formatMessage(
@@ -365,7 +404,7 @@ const Login: React.FC = () => {
   );
   const [submitting, setSubmitting] = useState(false);
   const [oidcOptions, setOidcOptions] = useState<API.OidcLoginInfo[]>([]);
-  const { initialState, setInitialState } = useModel('@@initialState');
+  const { setInitialState } = useModel('@@initialState');
   const { styles } = useStyles();
   const { message } = App.useApp();
   const intl = useIntl();
