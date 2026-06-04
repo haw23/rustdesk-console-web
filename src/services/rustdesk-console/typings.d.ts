@@ -341,9 +341,7 @@ declare namespace API {
     guid: string;
     name: string;
     note?: string;
-    status?: number;
-    rule_count?: number;
-    created_at?: string;
+    config_options?: Record<string, string>;
     updated_at?: string;
     [key: string]: any;
   };
@@ -351,14 +349,26 @@ declare namespace API {
   type CreateStrategyParams = {
     name: string;
     note?: string;
-    rules?: RuleItem[];
+    config_options?: Record<string, string>;
   };
 
   type UpdateStrategyParams = {
     name?: string;
     note?: string;
-    rules?: RuleItem[];
-    status?: number;
+    config_options?: Record<string, string>;
+  };
+
+  type StrategyAssignParams = {
+    target_type: 'device' | 'user' | 'device_group';
+    target_guids: string[];
+  };
+
+  type StrategyBatchResult = {
+    success: string[];
+    errors: Array<{
+      target_guid: string;
+      reason: string;
+    }>;
   };
 
   type UserGroupItem = {
