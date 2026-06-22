@@ -163,11 +163,11 @@ export default [
     component: './strategy',
   },
   {
-    path: '/custom-client',
-    name: 'customClients',
-    icon: 'form',
-    access: 'canAdmin',
-    component: './custom-client',
+//     path: '/custom-client',
+//     name: 'customClients',
+//     icon: 'form',
+//     access: 'canAdmin',
+//     component: './custom-client',
   },
   {
     path: '/settings',
