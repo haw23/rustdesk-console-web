@@ -51,7 +51,7 @@ export const getActionColumn = (
             type="link"
             size="small"
             icon={<DesktopOutlined />}
-            onClick={() => window.location.href = "rustdesk://connection/new/" + record.id}
+            onClick={() => window.location.href = "rustdesk://connection/new/" + record.id + "?relay"}
           >
             <FormattedMessage id="pages.devices.connect" defaultMessage="Connect" />
           </Button>
@@ -92,7 +92,7 @@ export const getActionColumn = (
             type="link"
             size="small"
             icon={<DesktopOutlined />}
-            onClick={() => window.location.href = "rustdesk://connection/new/" + record.id}
+            onClick={() => window.location.href = "rustdesk://connection/new/" + record.id + "?relay"}
           >
             <FormattedMessage id="pages.devices.connect" defaultMessage="Connect" />
           </Button>
