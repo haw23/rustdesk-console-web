@@ -28,9 +28,9 @@ export default defineConfig({
     plugins: ['duration'],
   },
   locale: {
-    default: 'zh-CN',
+    default: "zh-TW",
     antd: true,
-    baseNavigator: true,
+    baseNavigator: false,
   },
   antd: {
     appConfig: {},
