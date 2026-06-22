@@ -1,5 +1,6 @@
 import {
   DeleteOutlined,
+  DesktopOutlined,
   EditOutlined,
   MinusCircleOutlined,
   PlusCircleOutlined,
@@ -41,9 +42,19 @@ export const getActionColumn = (
     render: (_: unknown, record: API.DeviceItem) => {
       const isDisabled = record.status === 0;
 
-      // When in device group context, only show remove button
+      // When in device group context, show connect + remove buttons
       if (deviceGroupGuid) {
         return (
+          <Space size={0} split={<Divider type="vertical" />}>
+          <Button
+            key="connect"
+            type="link"
+            size="small"
+            icon={<DesktopOutlined />}
+            onClick={() => window.location.href = "rustdesk://connection/new/" + record.id}
+          >
+            <FormattedMessage id="pages.devices.connect" defaultMessage="Connect" />
+          </Button>
           <Popconfirm
             key="remove"
             title={
@@ -69,12 +80,22 @@ export const getActionColumn = (
               />
             </Button>
           </Popconfirm>
+        </Space>
         );
       }
 
       // Normal device list (not in device group context)
       return (
         <Space size={0} split={<Divider type="vertical" />}>
+          <Button
+            key="connect"
+            type="link"
+            size="small"
+            icon={<DesktopOutlined />}
+            onClick={() => window.location.href = "rustdesk://connection/new/" + record.id}
+          >
+            <FormattedMessage id="pages.devices.connect" defaultMessage="Connect" />
+          </Button>
           <Button
             key="edit"
             type="link"
