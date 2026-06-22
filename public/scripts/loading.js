@@ -191,10 +191,10 @@
           </div>
         </div>
         <div class="loading-title">
-          正在加载资源
+          正在載入資源
         </div>
         <div class="loading-sub-title">
-          初次加载资源可能需要较多时间 请耐心等待
+          初次載入可能需要較長時間，請耐心等候
         </div>
       </div>
     `;

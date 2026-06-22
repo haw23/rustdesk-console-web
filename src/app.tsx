@@ -129,7 +129,6 @@ export const layout: RunTimeLayoutConfig = ({
         return <AvatarDropdown>{avatarChildren}</AvatarDropdown>;
       },
     },
-    waterMarkProps: {
       content: initialState?.currentUser?.name,
     },
     footerRender: () => <Footer />,
